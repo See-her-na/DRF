@@ -1,4 +1,4 @@
-;; Full implementation from previous version
+;; Define the contract
 (define-data-var contract-owner principal tx-sender)
 
 ;; Define constants for errors
@@ -150,4 +150,52 @@
                 required-funding: required-funding, 
                 status: "pending" 
               })
-            (var-set milestone-count milestone-
+            (var-set milestone-count milestone-id)
+            (ok milestone-number)))
+        ERR-INVALID-INPUT)))
+
+(define-public (approve-milestone (grant-id uint) (milestone-number uint))
+  (let 
+    ((milestone-entry (unwrap! (map-get? research-milestones { id: milestone-number }) ERR-MILESTONE-NOT-FOUND))
+     (grant (unwrap! (get-research-grant grant-id) ERR-RESEARCHER-NOT-FOUND)))
+    (if (and (is-authorized tx-sender ROLE-PROGRAM-DIRECTOR)
+             (is-eq (get grant-id milestone-entry) grant-id)
+             (< grant-id (var-get grant-count))
+             (< milestone-number (var-get milestone-count)))
+        (if (<= (get required-funding milestone-entry) (get received-funding grant))
+            (begin
+              (map-set research-milestones
+                { id: milestone-number }
+                (merge milestone-entry { status: "approved" }))
+              (ok true))
+            ERR-INSUFFICIENT-FUNDS)
+        ERR-NOT-AUTHORIZED)))
+
+;; Get a single funding contribution by ID
+(define-read-only (get-contribution-by-id (contribution-id uint))
+  (match (map-get? funding-contributions { id: contribution-id })
+    contribution (ok contribution)
+    ERR-NOT-FOUND))
+
+;; Get a single milestone entry by ID
+(define-read-only (get-milestone-by-id (milestone-id uint))
+  (match (map-get? research-milestones { id: milestone-id })
+    milestone (ok milestone)
+    ERR-NOT-FOUND))
+
+;; Get the total number of funding contributions
+(define-read-only (get-contribution-count)
+  (ok (var-get contribution-count)))
+
+;; Get the total number of milestone entries
+(define-read-only (get-milestone-count)
+  (ok (var-get milestone-count)))
+
+;; Contract initialization
+(define-private (initialize-contract)
+  (begin
+    (map-set roles { user: tx-sender } { role: ROLE-PROGRAM-DIRECTOR })
+    (var-set contract-owner tx-sender)
+    (var-set current-timestamp u0)))
+
+(initialize-contract)
